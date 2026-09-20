@@ -15,4 +15,10 @@ private slots:
   void masksToolbarAndRectWhileDrawing();
   void ticksOnlyWhileFading();
   void showsTooltipAfterHover();
+  void hitTestsStrokesByTool();
+  void hitTestPrefersLatestStroke();
+  void movesAndRemovesSelectedStroke();
+  void selectedStrokeDoesNotFade();
+  void selectToolDrivesSelectionFromInput();
+  void toolbarShowsSelectButton();
 };

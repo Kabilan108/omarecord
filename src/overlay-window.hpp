@@ -50,6 +50,9 @@ public:
   [[nodiscard]] QString visibleTooltip() const {
     return tooltipShown_ ? tooltipFor(hovered_) : QString();
   }
+  /** Rect of the toolbar item whose tooltip is `tooltip`; null if absent. */
+  [[nodiscard]] QRect toolbarItemRect(const QString &tooltip) const;
+  [[nodiscard]] bool draggingSelection() const { return dragging_; }
 
 signals:
   void surfaceReady();
@@ -77,6 +80,7 @@ private:
     ToolArrow,
     ToolRectangle,
     ToolHighlighter,
+    ToolSelect,
     Colour0,
     Colour1,
     Colour2,
@@ -92,6 +96,9 @@ private:
   void applyMask();
   void onDrawingChanged(bool drawing);
   void setTool(Tool tool);
+  void deselect();
+  void pressSelect(const QPointF &point);
+  void paintSelection(QPainter &painter);
   void setColour(int index);
   void stepWidth(int delta);
   [[nodiscard]] qreal strokeWidth() const;
@@ -124,5 +131,7 @@ private:
   int width_ = 1;
   bool expanded_ = false;
   bool readyEmitted_ = false;
+  bool dragging_ = false;
+  QPointF dragLast_;
   Button hovered_ = Button::None;
 };
