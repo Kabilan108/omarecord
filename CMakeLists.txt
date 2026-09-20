@@ -16,6 +16,12 @@ add_library(omarecord-core STATIC
   src/niri.hpp
   src/overlay.cpp
   src/overlay.hpp
+  src/overlay-protocol.cpp
+  src/overlay-protocol.hpp
+  src/overlay-state.cpp
+  src/overlay-state.hpp
+  src/overlay-window.cpp
+  src/overlay-window.hpp
   src/select.cpp
   src/select.hpp
   src/rect.cpp
@@ -53,6 +59,8 @@ qt_add_executable(omarecord-smoke
   tests/rect-smoke.hpp
   tests/niri-smoke.cpp
   tests/niri-smoke.hpp
+  tests/overlay-smoke.cpp
+  tests/overlay-smoke.hpp
 )
 target_include_directories(omarecord-smoke PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/tests")
 target_compile_options(omarecord-smoke PRIVATE -Wall -Wextra -Wpedantic)
