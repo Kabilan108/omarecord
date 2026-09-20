@@ -124,11 +124,14 @@ Draw mode is entered from the toolbar's Draw button. While it is on:
 | Key | Action |
 |---|---|
 | `P` `A` `R` `H` | Pen, arrow, rectangle, highlighter |
+| `S` | Select: click a stroke to select it, drag to move it; a selected stroke does not fade |
+| `Delete` / `Backspace` | Remove the selected stroke |
+| `Ctrl+Z` | Remove the most recent stroke |
 | `1` – `4` | Colour: red, yellow, green, blue |
 | wheel | Stroke width (3, 6, 10 px; the highlighter is 4x wider) |
 | `L` | Hold: strokes persist until cleared instead of fading |
 | `C` | Clear all strokes |
-| `Esc` | Leave draw mode |
+| `Esc` | Clear the selection, then leave draw mode |
 
 Strokes fade 5 s after the pointer is released, over 0.7 s.
 
