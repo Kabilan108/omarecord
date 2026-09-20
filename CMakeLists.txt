@@ -30,6 +30,10 @@ add_library(omarecord-core STATIC
   src/selector-window.hpp
   src/rect.cpp
   src/rect.hpp
+  src/window-locate.cpp
+  src/window-locate.hpp
+  src/window-resolve.cpp
+  src/window-resolve.hpp
 )
 qt_add_resources(omarecord-core "omarecord-fonts"
   PREFIX "/fonts"
@@ -69,6 +73,8 @@ qt_add_executable(omarecord-smoke
   tests/overlay-smoke.hpp
   tests/annotation-smoke.cpp
   tests/annotation-smoke.hpp
+  tests/window-locate-smoke.cpp
+  tests/window-locate-smoke.hpp
 )
 target_include_directories(omarecord-smoke PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/tests")
 target_compile_options(omarecord-smoke PRIVATE -Wall -Wextra -Wpedantic)

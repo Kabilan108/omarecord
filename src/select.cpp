@@ -4,6 +4,7 @@
 #include "niri.hpp"
 #include "rect.hpp"
 #include "selector-window.hpp"
+#include "window-resolve.hpp"
 
 #include <QCommandLineParser>
 #include <QCoreApplication>
@@ -14,6 +15,7 @@
 #include <QSocketNotifier>
 #include <QStandardPaths>
 #include <QTextStream>
+#include <QThread>
 
 #include <cerrno>
 #include <csignal>
@@ -129,6 +131,31 @@ int runRegion(const OutputInfo &output, QTextStream &out, QTextStream &err) {
         << output.name << '\n';
     return 2;
   }
+  // Space needs the focused window and a clean capture of the output, and
+  // neither is available once the selector is up: Niri reports no focused
+  // window while an exclusive layer surface holds the keyboard, and grim
+  // would see the dim. Both are gathered now (well under 150 ms) so Space is
+  // instant; a failure here is only reported if Space is actually pressed.
+  QString windowError;
+  std::optional<WindowTarget> windowTarget =
+      prepareWindowTarget(output.name, windowError);
+  selector.setWindowPicker([&]() -> std::optional<RegionRect> {
+    if (!windowTarget)
+      return std::nullopt;
+    if (const auto region = resolveWindowRect(*windowTarget, windowError))
+      return region;
+    // The window may have repainted since the pre-capture (video, spinner).
+    // Re-capture without the dim: unmap, give the compositor two frames.
+    selector.hide();
+    for (int i = 0; i < 2; ++i) {
+      QCoreApplication::processEvents();
+      QThread::msleep(20);
+    }
+    QString refreshError;
+    if (!refreshOutputImage(*windowTarget, refreshError))
+      return std::nullopt;
+    return resolveWindowRect(*windowTarget, windowError);
+  });
   PosixSignalBridge signalBridge;
   QObject::connect(&selector, &SelectorWindow::finished, &selector,
                    [] { QCoreApplication::exit(0); });
@@ -140,6 +167,10 @@ int runRegion(const OutputInfo &output, QTextStream &out, QTextStream &err) {
   if (const std::optional<RegionRect> region = selector.result()) {
     printRegion(out, *region);
     return 0;
+  }
+  if (selector.failed()) {
+    err << "omarecord select: " << windowError << '\n';
+    return 2;
   }
   if (selector.cancelled())
     err << "omarecord select: cancelled (Esc)\n";
@@ -166,15 +197,23 @@ int runSelect(const QStringList &arguments) {
   QTextStream out(stdout);
   QTextStream err(stderr);
   const QString mode = parser.value(QStringLiteral("mode"));
+  QString error;
   if (mode == QStringLiteral("window")) {
-    err << "omarecord select: mode 'window' is not implemented yet\n";
-    return 2;
+    const std::optional<WindowTarget> target =
+        prepareWindowTarget(parser.value(QStringLiteral("output")), error);
+    const std::optional<RegionRect> region =
+        target ? resolveWindowRect(*target, error) : std::nullopt;
+    if (!region) {
+      err << "omarecord select: " << error << '\n';
+      return 2;
+    }
+    printRegion(out, *region);
+    return 0;
   }
   if (mode != QStringLiteral("monitor") && mode != QStringLiteral("region")) {
     err << "omarecord select: unknown mode '" << mode << "'\n";
     return 2;
   }
-  QString error;
   const std::optional<OutputInfo> output =
       resolveOutput(parser.value(QStringLiteral("output")), error);
   if (!output) {

@@ -3,6 +3,7 @@
 #include "overlay-smoke.hpp"
 #include "rect-smoke.hpp"
 #include "select-smoke.hpp"
+#include "window-locate-smoke.hpp"
 
 #include <QApplication>
 #include <QTest>
@@ -28,6 +29,10 @@ int main(int argc, char **argv) {
   }
   {
     AnnotationSmoke test;
+    status |= QTest::qExec(&test, argc, argv);
+  }
+  {
+    WindowLocateSmoke test;
     status |= QTest::qExec(&test, argc, argv);
   }
   return status;

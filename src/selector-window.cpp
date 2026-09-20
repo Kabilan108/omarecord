@@ -94,6 +94,20 @@ void SelectorWindow::cancel() {
   emit finished();
 }
 
+void SelectorWindow::pickWindow() {
+  if (done_ || !windowPicker_)
+    return;
+  // The picker may hide this window to re-capture the output, so the state
+  // is settled first and nothing here touches the widget afterwards.
+  done_ = true;
+  dragging_ = false;
+  if (const std::optional<RegionRect> region = windowPicker_())
+    result_ = region;
+  else
+    failed_ = true;
+  emit finished();
+}
+
 void SelectorWindow::mousePressEvent(QMouseEvent *event) {
   if (done_)
     return;
@@ -162,8 +176,7 @@ void SelectorWindow::keyPressEvent(QKeyEvent *event) {
     return;
   }
   if (event->key() == Qt::Key_Space) {
-    QTextStream(stderr)
-        << "omarecord select: window pick (Space) is not implemented yet\n";
+    pickWindow();
     return;
   }
   QWidget::keyPressEvent(event);
