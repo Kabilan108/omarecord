@@ -13,6 +13,7 @@
         let
           pkgs = import nixpkgs { inherit system; };
           layerShellPluginDir = "${pkgs.kdePackages.layer-shell-qt}/lib/qt-6/plugins";
+          runtimePackages = with pkgs; [ grim niri wl-clipboard ];
         in
         pkgs.stdenv.mkDerivation {
           pname = "omarecord";
@@ -44,8 +45,11 @@
             runHook postCheck
           '';
 
+          qtWrapperArgs = [ "--prefix PATH : ${lib.makeBinPath runtimePackages}" ];
+
           postFixup = ''
             test -e "${layerShellPluginDir}/wayland-shell-integration/liblayer-shell.so"
+            grep -aFq "${lib.makeBinPath runtimePackages}" "$out/bin/omarecord"
             QT_QPA_PLATFORM=offscreen "$out/bin/omarecord" --version
           '';
 
