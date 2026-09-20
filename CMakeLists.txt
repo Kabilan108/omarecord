@@ -18,6 +18,8 @@ add_library(omarecord-core STATIC
   src/overlay.hpp
   src/select.cpp
   src/select.hpp
+  src/selector-window.cpp
+  src/selector-window.hpp
   src/rect.cpp
   src/rect.hpp
 )
@@ -53,6 +55,8 @@ qt_add_executable(omarecord-smoke
   tests/rect-smoke.hpp
   tests/niri-smoke.cpp
   tests/niri-smoke.hpp
+  tests/select-smoke.cpp
+  tests/select-smoke.hpp
 )
 target_include_directories(omarecord-smoke PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/tests")
 target_compile_options(omarecord-smoke PRIVATE -Wall -Wextra -Wpedantic)

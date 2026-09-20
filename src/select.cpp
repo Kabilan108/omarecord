@@ -1,42 +1,173 @@
 #include "select.hpp"
 
+#include "instance-lock.hpp"
 #include "niri.hpp"
 #include "rect.hpp"
+#include "selector-window.hpp"
 
 #include <QCommandLineParser>
+#include <QCoreApplication>
+#include <QDir>
+#include <QGuiApplication>
 #include <QJsonDocument>
+#include <QLockFile>
+#include <QSocketNotifier>
+#include <QStandardPaths>
 #include <QTextStream>
+
+#include <cerrno>
+#include <csignal>
+#include <sys/socket.h>
+#include <unistd.h>
+
+namespace {
+
+/** Turns SIGTERM/SIGINT (a second `select` dismissing this one, or an
+ * orchestrator giving up) into an orderly event-loop exit so the lock file is
+ * released and the exit code stays within the contract. */
+class PosixSignalBridge final : public QObject {
+public:
+  explicit PosixSignalBridge(QObject *parent = nullptr) : QObject(parent) {
+    if (::socketpair(AF_UNIX, SOCK_DGRAM | SOCK_NONBLOCK | SOCK_CLOEXEC, 0,
+                     fds_) != 0)
+      return;
+    writeFd_ = fds_[0];
+    struct sigaction action{};
+    action.sa_handler = [](int) {
+      const int savedErrno = errno;
+      const char byte = 1;
+      if (writeFd_ >= 0 && ::write(writeFd_, &byte, sizeof(byte)) < 0) {
+        // Only a wake-up hint; a dropped datagram is harmless.
+      }
+      errno = savedErrno;
+    };
+    sigemptyset(&action.sa_mask);
+    action.sa_flags = SA_RESTART;
+    ::sigaction(SIGTERM, &action, &previousTerm_);
+    ::sigaction(SIGINT, &action, &previousInt_);
+    installed_ = true;
+    auto *notifier = new QSocketNotifier(fds_[1], QSocketNotifier::Read, this);
+    connect(notifier, &QSocketNotifier::activated, this, [this, notifier] {
+      notifier->setEnabled(false);
+      char drain[16];
+      while (::read(fds_[1], drain, sizeof(drain)) > 0) {
+      }
+      QCoreApplication::exit(0);
+    });
+  }
+
+  ~PosixSignalBridge() override {
+    if (installed_) {
+      ::sigaction(SIGTERM, &previousTerm_, nullptr);
+      ::sigaction(SIGINT, &previousInt_, nullptr);
+    }
+    writeFd_ = -1;
+    for (int fd : fds_) {
+      if (fd >= 0)
+        ::close(fd);
+    }
+  }
+
+private:
+  static inline volatile int writeFd_ = -1;
+  int fds_[2] = {-1, -1};
+  bool installed_ = false;
+  struct sigaction previousTerm_{};
+  struct sigaction previousInt_{};
+};
+
+std::optional<OutputInfo> resolveOutput(const QString &requested,
+                                        QString &error) {
+  const QList<OutputInfo> outputs = queryOutputs(error);
+  QString name = requested;
+  if (name.isEmpty())
+    name = queryFocusedOutputName(error).value_or(QString());
+  for (const OutputInfo &output : outputs) {
+    if (output.name == name)
+      return output;
+  }
+  if (error.isEmpty())
+    error = QStringLiteral("Unknown output: %1").arg(name);
+  return std::nullopt;
+}
+
+void printRegion(QTextStream &out, const RegionRect &region) {
+  out << QJsonDocument(region.toJson()).toJson(QJsonDocument::Compact) << '\n';
+  out.flush();
+}
+
+QString instanceLockPath() {
+  QString dir =
+      QStandardPaths::writableLocation(QStandardPaths::RuntimeLocation);
+  if (dir.isEmpty())
+    dir = QDir::tempPath();
+  return QDir(dir).filePath(QStringLiteral("omarecord-select.lock"));
+}
+
+int runRegion(const OutputInfo &output, QTextStream &out, QTextStream &err) {
+  QLockFile lock(instanceLockPath());
+  const InstanceLockResult lockResult =
+      acquireInstanceLock(lock, InstanceMode::Capture);
+  if (!lockResult.proceed) {
+    if (!lockResult.error.isEmpty())
+      err << lockResult.error << '\n';
+    // Dismissing a running selector is a cancel, not a failure.
+    return lockResult.exitCode == kInstanceCancelledExitCode ? 1 : 2;
+  }
+  SelectorWindow selector(output);
+  if (QGuiApplication::platformName() == QStringLiteral("wayland") &&
+      !selector.attachLayerShell()) {
+    err << "omarecord select: could not create a layer surface on "
+        << output.name << '\n';
+    return 2;
+  }
+  PosixSignalBridge signalBridge;
+  QObject::connect(&selector, &SelectorWindow::finished, &selector,
+                   [] { QCoreApplication::exit(0); });
+  selector.show();
+  selector.setFocus(Qt::ActiveWindowFocusReason);
+  QCoreApplication::exec();
+  // The loop ends on confirm, Esc, or a signal; anything without a region is
+  // a cancel from the orchestrator's point of view.
+  const std::optional<RegionRect> region = selector.result();
+  if (!region)
+    return 1;
+  printRegion(out, *region);
+  return 0;
+}
+
+} // namespace
 
 int runSelect(const QStringList &arguments) {
   QCommandLineParser parser;
   parser.addOptions({
       {QStringLiteral("mode"), QStringLiteral("region|window|monitor"),
        QStringLiteral("mode"), QStringLiteral("region")},
-      {QStringLiteral("output"), QStringLiteral("Output name"), QStringLiteral("name")},
+      {QStringLiteral("output"), QStringLiteral("Output name"),
+       QStringLiteral("name")},
   });
   parser.process(arguments);
   QTextStream out(stdout);
   QTextStream err(stderr);
-  QString error;
   const QString mode = parser.value(QStringLiteral("mode"));
-  if (mode == QStringLiteral("monitor")) {
-    const QList<OutputInfo> outputs = queryOutputs(error);
-    QString name = parser.value(QStringLiteral("output"));
-    if (name.isEmpty()) {
-      name = queryFocusedOutputName(error).value_or(QString());
-    }
-    for (const OutputInfo &output : outputs) {
-      if (output.name == name) {
-        out << QJsonDocument(RegionRect{output.name, output.logical}.toJson())
-                   .toJson(QJsonDocument::Compact)
-            << '\n';
-        return 0;
-      }
-    }
-    err << (error.isEmpty() ? QStringLiteral("Unknown output: %1").arg(name) : error)
-        << '\n';
+  if (mode == QStringLiteral("window")) {
+    err << "omarecord select: mode 'window' is not implemented yet\n";
     return 2;
   }
-  err << "omarecord select: mode '" << mode << "' is not implemented yet\n";
-  return 2;
+  if (mode != QStringLiteral("monitor") && mode != QStringLiteral("region")) {
+    err << "omarecord select: unknown mode '" << mode << "'\n";
+    return 2;
+  }
+  QString error;
+  const std::optional<OutputInfo> output =
+      resolveOutput(parser.value(QStringLiteral("output")), error);
+  if (!output) {
+    err << error << '\n';
+    return 2;
+  }
+  if (mode == QStringLiteral("monitor")) {
+    printRegion(out, RegionRect{output->name, output->logical});
+    return 0;
+  }
+  return runRegion(*output, out, err);
 }
