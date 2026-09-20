@@ -426,8 +426,8 @@ void OverlayWindow::paintToolbar(QPainter &painter) {
   if (collapsed()) {
     painter.setPen(Qt::NoPen);
     painter.setBrush(accent);
-    painter.drawEllipse(QRectF(bar.center().x() - kDotSize / 2.0,
-                               bar.center().y() - kDotSize / 2.0, kDotSize, kDotSize));
+    const QPointF centre = QRectF(bar).center();
+    painter.drawEllipse(centre, kDotSize / 2.0, kDotSize / 2.0);
     return;
   }
 
@@ -435,8 +435,8 @@ void OverlayWindow::paintToolbar(QPainter &painter) {
                           bar.height());
   painter.setPen(Qt::NoPen);
   painter.setBrush(accent);
-  painter.drawEllipse(QRectF(elapsedRect.left(), elapsedRect.center().y() - kDotSize / 2.0,
-                             kDotSize, kDotSize));
+  painter.drawEllipse(QPointF(elapsedRect.left() + kDotSize / 2.0, QRectF(elapsedRect).center().y()),
+                      kDotSize / 2.0, kDotSize / 2.0);
   painter.setPen(text);
   painter.setFont(neuchaFont(14));
   painter.drawText(elapsedRect.adjusted(kDotSize + 6, 0, 0, 0),
