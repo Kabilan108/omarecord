@@ -23,8 +23,15 @@ contracts. Do not re-open settled decisions.
 | Path | Purpose |
 |---|---|
 | `src/main.cpp` | Subcommand dispatch only |
-| `src/select.cpp/.hpp` | `select` subcommand |
-| `src/overlay.cpp/.hpp` | `overlay` subcommand |
+| `src/select.cpp/.hpp` | `select` subcommand: arguments, modes, exit codes |
+| `src/selector-window.cpp/.hpp` | Layer-shell region picker (dim, drag, Space, Ctrl+A) |
+| `src/window-resolve.cpp/.hpp` | Focused window to global rect via IPC, `grim`, `screenshot-window` |
+| `src/window-locate.cpp/.hpp` | Pure sub-image search used by window-resolve |
+| `src/overlay.cpp/.hpp` | `overlay` subcommand: arguments, layer surface, wiring |
+| `src/overlay-protocol.cpp/.hpp` | Newline-JSON Unix socket server |
+| `src/overlay-state.cpp/.hpp` | Pause/elapsed/draw state and toolbar placement, GUI-free |
+| `src/overlay-window.cpp/.hpp` | Border, toolbar, strokes, key and pointer handling |
+| `src/annotation-model.cpp/.hpp` | Strokes with fade/hold lifetime on an explicit clock |
 | `src/niri.cpp/.hpp` | Niri IPC queries and pure JSON parsers |
 | `src/rect.cpp/.hpp` | `RegionRect`, WxH+X+Y parsing/formatting |
 | `src/icons.cpp/.hpp` | Vector toolbar icons (from OmaSnap) |

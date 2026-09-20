@@ -55,6 +55,7 @@
 
           meta = {
             description = "Niri-native screen recording selector and annotation overlay";
+            homepage = "https://github.com/Kabilan108/omarecord";
             license = lib.licenses.mit;
             mainProgram = "omarecord";
             platforms = lib.platforms.linux;

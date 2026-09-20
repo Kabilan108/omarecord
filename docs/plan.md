@@ -1,11 +1,13 @@
 # omarecord — v1 plan
 
+Working design record for the initial build: the decisions and contracts here are what the code implements; the slice list is history, not a roadmap.
+
 Region/window/monitor screen recording for Niri with live on-screen annotation.
 Two small native primitives (`select`, `overlay`) driven by the existing
 `stillsuit-recorder` orchestrator; `gpu-screen-recorder` does the capture.
 
-Status: agreed 2026-09-19; slices 1–5, 7, 8 landed 2026-09-20, slice 6 in progress. Decisions below are settled unless a
-spike overturns them; anything marked *open* is not.
+Status: agreed 2026-09-19; slices 1–8 landed 2026-09-20. Decisions below are
+settled unless a spike overturns them; anything marked *open* is not.
 
 ## Decisions (settled)
 
