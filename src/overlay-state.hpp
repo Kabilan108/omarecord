@@ -45,6 +45,7 @@ public:
   /** Applies one inbound command; unknown or malformed commands are ignored. */
   void applyCommand(const QJsonObject &command);
   void toggleDrawing();
+  void setDrawing(bool drawing);
   /** User clicked Pause/Resume; the orchestrator owns the actual state, so
    * this only emits the outbound event. */
   void requestPause();
@@ -52,6 +53,9 @@ public:
 
 signals:
   void changed();
+  /** Draw mode flipped; the window re-masks and the layer surface switches
+   * keyboard interactivity. */
+  void drawingChanged(bool drawing);
   void quitRequestedChanged();
   /** An outbound event to relay to the orchestrator. */
   void eventRequested(const QString &event);

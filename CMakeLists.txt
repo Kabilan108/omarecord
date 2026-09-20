@@ -8,6 +8,8 @@ find_package(Qt6 6.8 REQUIRED COMPONENTS Core Gui Network Test Widgets)
 find_package(LayerShellQt REQUIRED)
 
 add_library(omarecord-core STATIC
+  src/annotation-model.cpp
+  src/annotation-model.hpp
   src/icons.cpp
   src/icons.hpp
   src/instance-lock.cpp
@@ -65,6 +67,8 @@ qt_add_executable(omarecord-smoke
   tests/select-smoke.hpp
   tests/overlay-smoke.cpp
   tests/overlay-smoke.hpp
+  tests/annotation-smoke.cpp
+  tests/annotation-smoke.hpp
 )
 target_include_directories(omarecord-smoke PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/tests")
 target_compile_options(omarecord-smoke PRIVATE -Wall -Wextra -Wpedantic)

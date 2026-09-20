@@ -61,8 +61,14 @@ void OverlayState::applyCommand(const QJsonObject &command) {
   }
 }
 
-void OverlayState::toggleDrawing() {
-  drawing_ = !drawing_;
+void OverlayState::toggleDrawing() { setDrawing(!drawing_); }
+
+void OverlayState::setDrawing(bool drawing) {
+  if (drawing == drawing_) {
+    return;
+  }
+  drawing_ = drawing;
+  emit drawingChanged(drawing_);
   emit changed();
 }
 

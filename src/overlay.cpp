@@ -91,6 +91,14 @@ int runOverlay(const QStringList &arguments) {
   layer->setExclusiveZone(-1);
   layer->setKeyboardInteractivity(LayerShellQt::Window::KeyboardInteractivityNone);
   layer->setActivateOnShow(false);
+  // layer-shell-qt forwards keyboardInteractivityChanged straight to
+  // zwlr_layer_surface_v1.set_keyboard_interactivity, so the switch applies
+  // on the next commit without recreating the surface.
+  QObject::connect(&state, &OverlayState::drawingChanged, layer, [layer](bool drawing) {
+    layer->setKeyboardInteractivity(drawing
+                                        ? LayerShellQt::Window::KeyboardInteractivityOnDemand
+                                        : LayerShellQt::Window::KeyboardInteractivityNone);
+  });
 
   bool ready = false;
   QObject::connect(&window, &OverlayWindow::surfaceReady, &protocol, [&] {

@@ -1,3 +1,4 @@
+#include "annotation-smoke.hpp"
 #include "niri-smoke.hpp"
 #include "overlay-smoke.hpp"
 #include "rect-smoke.hpp"
@@ -23,6 +24,10 @@ int main(int argc, char **argv) {
   }
   {
     OverlaySmoke test;
+    status |= QTest::qExec(&test, argc, argv);
+  }
+  {
+    AnnotationSmoke test;
     status |= QTest::qExec(&test, argc, argv);
   }
   return status;
