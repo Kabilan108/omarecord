@@ -32,10 +32,11 @@ constexpr int kTooltipDelayMs = 400;
 constexpr int kTooltipHeight = 22;
 constexpr int kTooltipGap = 6;
 constexpr int kHoldWidth = 44;
+constexpr qreal kSelectionPadding = 4.0;
 
 constexpr int idleToolbarWidth = kToolbarPadding * 2 + kElapsedWidth + kButtonGap * 4 +
                                  kButtonSize * 3 + kHoldWidth;
-constexpr int drawingExtras = kSeparator + kToolButtonSize * 4 + kButtonGap * 3 + kSeparator +
+constexpr int drawingExtras = kSeparator + kToolButtonSize * 5 + kButtonGap * 4 + kSeparator +
                               kSwatchSize * 4 + kSwatchGap * 3 + kSeparator +
                               kToolButtonSize + kSeparator;
 
@@ -72,6 +73,8 @@ QString toolIcon(Tool tool) {
     return QStringLiteral("tool-rectangle");
   case Tool::Highlighter:
     return QStringLiteral("tool-highlighter");
+  case Tool::Select:
+    return QStringLiteral("tool-select");
   }
   return QString();
 }
@@ -137,6 +140,7 @@ void OverlayWindow::applyMask() {
 void OverlayWindow::onDrawingChanged(bool drawing) {
   if (!drawing) {
     model_.cancel();
+    deselect();
     setHovered(Button::None);
   } else {
     setFocus();
@@ -147,6 +151,42 @@ void OverlayWindow::onDrawingChanged(bool drawing) {
 
 void OverlayWindow::setTool(Tool tool) {
   tool_ = tool;
+  deselect();
+  if (tool_ == Tool::Select) {
+    setCursor(Qt::ArrowCursor);
+  } else {
+    unsetCursor();
+  }
+  update();
+}
+
+void OverlayWindow::deselect() {
+  dragging_ = false;
+  if (tool_ == Tool::Select) {
+    setCursor(Qt::ArrowCursor);
+  }
+  if (!model_.selected()) {
+    return;
+  }
+  model_.deselect(now());
+  scheduleFade();
+  update();
+}
+
+void OverlayWindow::pressSelect(const QPointF &point) {
+  const std::optional<int> hit = model_.hitTest(point);
+  if (!hit) {
+    deselect();
+    return;
+  }
+  if (model_.selected() != hit) {
+    model_.deselect(now());
+    model_.select(*hit);
+  }
+  dragging_ = true;
+  dragLast_ = point;
+  setCursor(Qt::SizeAllCursor);
+  scheduleFade();
   update();
 }
 
@@ -210,8 +250,8 @@ QList<OverlayWindow::ButtonRect> OverlayWindow::buttonRects() const {
   x += kButtonSize + kButtonGap;
   if (state_.drawing()) {
     x += kSeparator;
-    for (Button button :
-         {Button::ToolPen, Button::ToolArrow, Button::ToolRectangle, Button::ToolHighlighter}) {
+    for (Button button : {Button::ToolPen, Button::ToolArrow, Button::ToolRectangle,
+                          Button::ToolHighlighter, Button::ToolSelect}) {
       rects.append({button, QRect(x, toolY, kToolButtonSize, kToolButtonSize)});
       x += kToolButtonSize + kButtonGap;
     }
@@ -263,6 +303,8 @@ QString OverlayWindow::tooltipFor(Button button) const {
     return QStringLiteral("Rectangle (R)");
   case Button::ToolHighlighter:
     return QStringLiteral("Highlighter (H)");
+  case Button::ToolSelect:
+    return QStringLiteral("Select (S)");
   case Button::Colour0:
     return QStringLiteral("Red (1)");
   case Button::Colour1:
@@ -279,6 +321,15 @@ QString OverlayWindow::tooltipFor(Button button) const {
     break;
   }
   return QString();
+}
+
+QRect OverlayWindow::toolbarItemRect(const QString &tooltip) const {
+  for (const ButtonRect &entry : buttonRects()) {
+    if (tooltipFor(entry.button) == tooltip) {
+      return entry.rect;
+    }
+  }
+  return QRect();
 }
 
 void OverlayWindow::setHovered(Button button) {
@@ -369,7 +420,25 @@ void OverlayWindow::paintStrokes(QPainter &painter) {
   if (const Stroke *active = model_.activeStroke()) {
     paintStroke(painter, *active, 1.0);
   }
+  paintSelection(painter);
   painter.restore();
+}
+
+void OverlayWindow::paintSelection(QPainter &painter) {
+  const std::optional<int> selected = model_.selected();
+  if (!selected) {
+    return;
+  }
+  const Stroke &stroke = model_.strokes().at(*selected);
+  QRectF bounds = QPolygonF(stroke.points).boundingRect();
+  const qreal pad = kSelectionPadding + (stroke.tool == Tool::Rectangle ? 0.0 : stroke.width / 2.0);
+  bounds.adjust(-pad, -pad, pad, pad);
+  QPen pen(QColor(255, 255, 255, 153), 1.0);
+  pen.setStyle(Qt::CustomDashLine);
+  pen.setDashPattern({4.0, 3.0});
+  painter.setPen(pen);
+  painter.setBrush(Qt::NoBrush);
+  painter.drawRect(bounds);
 }
 
 void OverlayWindow::paintStroke(QPainter &painter, const Stroke &stroke, qreal opacity) const {
@@ -408,6 +477,8 @@ void OverlayWindow::paintStroke(QPainter &painter, const Stroke &stroke, qreal o
     painter.drawPolygon(head);
     break;
   }
+  case Tool::Select:
+    break;
   }
   painter.setOpacity(1.0);
 }
@@ -449,7 +520,8 @@ void OverlayWindow::paintToolbar(QPainter &painter) {
                         (button == Button::ToolPen && tool_ == Tool::Pen) ||
                         (button == Button::ToolArrow && tool_ == Tool::Arrow) ||
                         (button == Button::ToolRectangle && tool_ == Tool::Rectangle) ||
-                        (button == Button::ToolHighlighter && tool_ == Tool::Highlighter);
+                        (button == Button::ToolHighlighter && tool_ == Tool::Highlighter) ||
+                        (button == Button::ToolSelect && tool_ == Tool::Select);
     const bool swatch = button >= Button::Colour0 && button <= Button::Colour3;
     if (button == Button::Hold) {
       painter.setPen(Qt::NoPen);
@@ -480,11 +552,13 @@ void OverlayWindow::paintToolbar(QPainter &painter) {
     case Button::ToolPen:
     case Button::ToolArrow:
     case Button::ToolRectangle:
-    case Button::ToolHighlighter: {
-      const Tool tool = button == Button::ToolPen         ? Tool::Pen
-                        : button == Button::ToolArrow     ? Tool::Arrow
-                        : button == Button::ToolRectangle ? Tool::Rectangle
-                                                          : Tool::Highlighter;
+    case Button::ToolHighlighter:
+    case Button::ToolSelect: {
+      const Tool tool = button == Button::ToolPen           ? Tool::Pen
+                        : button == Button::ToolArrow       ? Tool::Arrow
+                        : button == Button::ToolRectangle   ? Tool::Rectangle
+                        : button == Button::ToolHighlighter ? Tool::Highlighter
+                                                            : Tool::Select;
       drawToolbarIcon(painter, bounds, toolIcon(tool), QString(), color);
       break;
     }
@@ -566,6 +640,9 @@ void OverlayWindow::mousePressEvent(QMouseEvent *event) {
   case Button::ToolHighlighter:
     setTool(Tool::Highlighter);
     break;
+  case Button::ToolSelect:
+    setTool(Tool::Select);
+    break;
   case Button::Colour0:
   case Button::Colour1:
   case Button::Colour2:
@@ -578,9 +655,13 @@ void OverlayWindow::mousePressEvent(QMouseEvent *event) {
   case Button::None:
     if (state_.drawing() && localRect_.contains(event->pos())) {
       setFocus();
-      model_.begin(tool_, strokeColour(), strokeWidth(),
-                   QPointF(event->pos() - localRect_.topLeft()));
-      update();
+      const QPointF local(event->pos() - localRect_.topLeft());
+      if (tool_ == Tool::Select) {
+        pressSelect(local);
+      } else {
+        model_.begin(tool_, strokeColour(), strokeWidth(), local);
+        update();
+      }
     }
     break;
   }
@@ -588,6 +669,13 @@ void OverlayWindow::mousePressEvent(QMouseEvent *event) {
 }
 
 void OverlayWindow::mouseMoveEvent(QMouseEvent *event) {
+  if (dragging_) {
+    const QPointF local(event->pos() - localRect_.topLeft());
+    model_.moveSelected(local - dragLast_, now());
+    dragLast_ = local;
+    update();
+    return;
+  }
   if (model_.active()) {
     model_.extend(QPointF(event->pos() - localRect_.topLeft()));
     update();
@@ -597,7 +685,17 @@ void OverlayWindow::mouseMoveEvent(QMouseEvent *event) {
 }
 
 void OverlayWindow::mouseReleaseEvent(QMouseEvent *event) {
-  if (event->button() != Qt::LeftButton || !model_.active()) {
+  if (event->button() != Qt::LeftButton) {
+    return;
+  }
+  if (dragging_) {
+    dragging_ = false;
+    setCursor(Qt::ArrowCursor);
+    update();
+    event->accept();
+    return;
+  }
+  if (!model_.active()) {
     return;
   }
   model_.extend(QPointF(event->pos() - localRect_.topLeft()));
@@ -625,7 +723,30 @@ void OverlayWindow::keyPressEvent(QKeyEvent *event) {
   }
   switch (event->key()) {
   case Qt::Key_Escape:
-    state_.setDrawing(false);
+    if (model_.selected()) {
+      deselect();
+    } else {
+      state_.setDrawing(false);
+    }
+    break;
+  case Qt::Key_S:
+    setTool(Tool::Select);
+    break;
+  case Qt::Key_Delete:
+  case Qt::Key_Backspace:
+    dragging_ = false;
+    model_.removeSelected();
+    scheduleFade();
+    update();
+    break;
+  case Qt::Key_Z:
+    if (!event->modifiers().testFlag(Qt::ControlModifier)) {
+      QWidget::keyPressEvent(event);
+      return;
+    }
+    model_.removeLast();
+    scheduleFade();
+    update();
     break;
   case Qt::Key_P:
     setTool(Tool::Pen);
@@ -646,6 +767,7 @@ void OverlayWindow::keyPressEvent(QKeyEvent *event) {
     setColour(event->key() - Qt::Key_1);
     break;
   case Qt::Key_C:
+    dragging_ = false;
     model_.clear();
     scheduleFade();
     update();

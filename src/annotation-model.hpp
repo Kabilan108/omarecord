@@ -8,7 +8,7 @@
 #include <optional>
 #include <QtGlobal>
 
-enum class Tool { Pen, Arrow, Rectangle, Highlighter };
+enum class Tool { Pen, Arrow, Rectangle, Highlighter, Select };
 
 struct Stroke {
   Tool tool = Tool::Pen;
@@ -49,7 +49,22 @@ public:
 
   /** Turning hold off restarts every stroke's fade clock at `now`. */
   void setHold(bool hold, qint64 now);
+  /** Drops every stroke and the selection. */
   void clear();
+
+  /** Index into strokes() of the selected stroke, if any. A selected stroke
+   * never fades; its fade clock restarts on deselect. */
+  [[nodiscard]] std::optional<int> selected() const { return selected_; }
+  void select(int index);
+  void deselect(qint64 now);
+  /** Topmost stroke under `point` (rect-local), with the per-tool slack
+   * described in the plan; empty when nothing is close enough. */
+  [[nodiscard]] std::optional<int> hitTest(const QPointF &point) const;
+  /** Translates the selected stroke and restarts its fade clock. */
+  void moveSelected(const QPointF &delta, qint64 now);
+  void removeSelected();
+  /** Single-level undo: drops the most recent stroke. */
+  void removeLast();
 
   /** 1.0 until the fade starts, linear to 0.0 across the fade duration. */
   [[nodiscard]] qreal opacity(const Stroke &stroke, qint64 now) const;
@@ -64,5 +79,8 @@ private:
   FadeSettings settings_;
   QList<Stroke> strokes_;
   std::optional<Stroke> active_;
+  std::optional<int> selected_;
   bool hold_ = false;
+
+  [[nodiscard]] bool isSelected(const Stroke &stroke) const;
 };
