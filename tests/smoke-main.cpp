@@ -1,4 +1,5 @@
 #include "niri-smoke.hpp"
+#include "overlay-smoke.hpp"
 #include "rect-smoke.hpp"
 #include "select-smoke.hpp"
 
@@ -18,6 +19,10 @@ int main(int argc, char **argv) {
   }
   {
     SelectSmoke test;
+    status |= QTest::qExec(&test, argc, argv);
+  }
+  {
+    OverlaySmoke test;
     status |= QTest::qExec(&test, argc, argv);
   }
   return status;
