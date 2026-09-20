@@ -131,6 +131,14 @@ void SelectorWindow::mouseReleaseEvent(QMouseEvent *event) {
     confirm(local);
     return;
   }
+  // A release right after the press (a click, or an injected device that
+  // vanished mid-drag) is the usual cause; say so rather than sit silently.
+  QTextStream(stderr) << "omarecord select: ignored " << local.width() << "x"
+                      << local.height() << " drag at "
+                      << toGlobal(dragStart_).x() << ","
+                      << toGlobal(dragStart_).y() << " (minimum "
+                      << kMinimumRegionSide << "x" << kMinimumRegionSide
+                      << "), still waiting\n";
   selection_ = {};
   update();
 }

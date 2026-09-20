@@ -33,9 +33,9 @@ public:
       return;
     writeFd_ = fds_[0];
     struct sigaction action{};
-    action.sa_handler = [](int) {
+    action.sa_handler = [](int signal) {
       const int savedErrno = errno;
-      const char byte = 1;
+      const char byte = static_cast<char>(signal);
       if (writeFd_ >= 0 && ::write(writeFd_, &byte, sizeof(byte)) < 0) {
         // Only a wake-up hint; a dropped datagram is harmless.
       }
@@ -49,12 +49,15 @@ public:
     auto *notifier = new QSocketNotifier(fds_[1], QSocketNotifier::Read, this);
     connect(notifier, &QSocketNotifier::activated, this, [this, notifier] {
       notifier->setEnabled(false);
-      char drain[16];
-      while (::read(fds_[1], drain, sizeof(drain)) > 0) {
-      }
+      char received = 0;
+      while (::read(fds_[1], &received, sizeof(received)) > 0)
+        signal_ = received;
       QCoreApplication::exit(0);
     });
   }
+
+  /** The signal that ended the event loop, or 0 if none arrived. */
+  [[nodiscard]] int receivedSignal() const { return signal_; }
 
   ~PosixSignalBridge() override {
     if (installed_) {
@@ -71,6 +74,7 @@ public:
 private:
   static inline volatile int writeFd_ = -1;
   int fds_[2] = {-1, -1};
+  int signal_ = 0;
   bool installed_ = false;
   struct sigaction previousTerm_{};
   struct sigaction previousInt_{};
@@ -109,10 +113,14 @@ int runRegion(const OutputInfo &output, QTextStream &out, QTextStream &err) {
   const InstanceLockResult lockResult =
       acquireInstanceLock(lock, InstanceMode::Capture);
   if (!lockResult.proceed) {
-    if (!lockResult.error.isEmpty())
+    if (!lockResult.error.isEmpty()) {
       err << lockResult.error << '\n';
+      return 2;
+    }
     // Dismissing a running selector is a cancel, not a failure.
-    return lockResult.exitCode == kInstanceCancelledExitCode ? 1 : 2;
+    err << "omarecord select: dismissed the running selector (pid "
+        << lockResult.signalledPid << "); nothing selected\n";
+    return 1;
   }
   SelectorWindow selector(output);
   if (QGuiApplication::platformName() == QStringLiteral("wayland") &&
@@ -129,11 +137,19 @@ int runRegion(const OutputInfo &output, QTextStream &out, QTextStream &err) {
   QCoreApplication::exec();
   // The loop ends on confirm, Esc, or a signal; anything without a region is
   // a cancel from the orchestrator's point of view.
-  const std::optional<RegionRect> region = selector.result();
-  if (!region)
-    return 1;
-  printRegion(out, *region);
-  return 0;
+  if (const std::optional<RegionRect> region = selector.result()) {
+    printRegion(out, *region);
+    return 0;
+  }
+  if (selector.cancelled())
+    err << "omarecord select: cancelled (Esc)\n";
+  else if (const int signal = signalBridge.receivedSignal(); signal != 0)
+    err << "omarecord select: cancelled by signal "
+        << (signal == SIGTERM ? "SIGTERM" : signal == SIGINT ? "SIGINT" : "?")
+        << " before a region was chosen\n";
+  else
+    err << "omarecord select: event loop ended without a region\n";
+  return 1;
 }
 
 } // namespace
