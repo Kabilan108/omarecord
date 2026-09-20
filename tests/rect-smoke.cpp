@@ -22,7 +22,7 @@ void RectSmoke::rejectsEmptyOrMalformedGeometry() {
 
 void RectSmoke::roundTripsGeometryAndJson() {
   const RegionRect region{QStringLiteral("DP-4"), QRect(100, -1400, 800, 400)};
-  QCOMPARE(region.toGeometry(), QStringLiteral("800x400+100-1400"));
+  QCOMPARE(region.toGeometry(), QStringLiteral("800x400+100+-1400"));
   QCOMPARE(parseGeometry(region.toGeometry()).value(), region.rect);
   const QJsonObject json = region.toJson();
   QCOMPARE(json.value(QStringLiteral("output")).toString(), QStringLiteral("DP-4"));

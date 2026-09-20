@@ -11,12 +11,10 @@ QJsonObject RegionRect::toJson() const {
 }
 
 QString RegionRect::toGeometry() const {
-  return QStringLiteral("%1x%2%3%4%5%6")
+  return QStringLiteral("%1x%2+%3+%4")
       .arg(rect.width())
       .arg(rect.height())
-      .arg(rect.x() < 0 ? QString() : QStringLiteral("+"))
       .arg(rect.x())
-      .arg(rect.y() < 0 ? QString() : QStringLiteral("+"))
       .arg(rect.y());
 }
 

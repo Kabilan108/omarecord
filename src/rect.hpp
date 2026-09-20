@@ -14,7 +14,8 @@ struct RegionRect {
   QRect rect;
 
   [[nodiscard]] QJsonObject toJson() const;
-  /** Formats as WxH+X+Y, the form gpu-screen-recorder takes on -w. */
+  /** Formats as WxH+X+Y with the sign after the plus (800x400+100+-1400),
+   * the only form gpu-screen-recorder accepts on -w. */
   [[nodiscard]] QString toGeometry() const;
 };
 
