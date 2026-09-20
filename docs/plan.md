@@ -4,7 +4,7 @@ Region/window/monitor screen recording for Niri with live on-screen annotation.
 Two small native primitives (`select`, `overlay`) driven by the existing
 `stillsuit-recorder` orchestrator; `gpu-screen-recorder` does the capture.
 
-Status: agreed 2026-09-19, not started. Decisions below are settled unless a
+Status: agreed 2026-09-19; slices 1–5, 7, 8 landed 2026-09-20, slice 6 in progress. Decisions below are settled unless a
 spike overturns them; anything marked *open* is not.
 
 ## Decisions (settled)
@@ -140,11 +140,18 @@ Each slice ends with something runnable and a check.
 v1.1 backlog: keystroke display (evdev + xkbcommon, pill at bottom edge),
 click ripple, portal/private mode once gsr's portal path is stable, trimming.
 
-## Open
+## Resolved during implementation
 
-- Overlay input-region switching on Niri: confirm layer-shell-qt exposes
-  `wl_surface.set_input_region` changes at runtime, otherwise re-create the
-  surface on Draw toggle (slice 4).
-- Whether the orchestrator's socket loop lives in the existing Python
-  (threads + `selectors`) or as a small `stillsuit-recorder daemon` child.
-  Decide in slice 3.
+- Input-region and keyboard-interactivity switch live on the existing layer
+  surface (`QWindow::setMask` → `set_input_region`; layer-shell-qt forwards
+  `setKeyboardInteractivity`). No surface re-creation.
+- The socket loop is a detached `stillsuit-recorder relay` child; `start`
+  still returns immediately.
+- gpu-screen-recorder accepts only `WxH+X+Y` with the sign after the plus
+  (`800x400+100+-1400`); `-` as separator is parsed as a monitor name.
+- Window mode: Niri IPC reports no position for tiled windows, so the rect is
+  found by locating `screenshot-window` output inside a `grim` capture of the
+  output (floating windows use `tile_pos_in_workspace_view` directly).
+- Injected input for tests: one-shot `dotool` calls synthesise a button
+  release when their uinput device is torn down; keep one `dotool` alive on a
+  fifo for the whole drag. `dotool` names Escape `esc`.
